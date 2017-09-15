@@ -32,9 +32,6 @@ class Multiplicador(multiprocessing.Process):
             [self.k, self.n] = B.shape
             self.C = np.matrix(np.zeros([self.m, self.n]))
 
-            if self.m==0: #Sinal de Fim do Agregador
-                self.terminate()
-
             inicial = self.tn * int(self.m * self.n / self.p)
             self.final = inicial + int(self.m * self.n / self.p)
             if self.tn == self.p - 1:
@@ -67,13 +64,9 @@ class Multiplicador(multiprocessing.Process):
 
             #Sinaliza Agregador fim do Calculo
             if self.contador.value > self.p -1:
-                if ci > 1:
-                    print('cheguei')
                 self.sinal.release()
-                self.barreira_entrada.acquire()
-                self.barreira_saida.release()
-
             self.mutex.release()
+
             #Fim da Area Critica, inicio barreira de Saida
             self.barreira_saida.acquire()
             self.barreira_saida.release()
@@ -82,7 +75,11 @@ class Multiplicador(multiprocessing.Process):
 class Agregador(multiprocessing.Process):
     def __init__(self,n_threads=4,n_ciclos=100,max_size=10000,min_size=1,quadradas=False):
         super(Agregador,self).__init__()
-        self.n_threads=n_threads
+        if n_threads<1:
+            self.n_threads = int(multiprocessing.cpu_count())
+        else:
+            self.n_threads=n_threads
+        print("Processo de Multiplicação com "+str(self.n_threads)+" cores")
         self.n_ciclos=n_ciclos
         self.max_size=max_size
         self.min_size=min_size
@@ -140,7 +137,7 @@ class Agregador(multiprocessing.Process):
 
             #Espera Pelo Sinal
             sinal.acquire()
-
+            barreira_entrada.acquire()
 
             mutex.acquire()
             contador.value = 0
@@ -151,20 +148,22 @@ class Agregador(multiprocessing.Process):
             #Escreve A
             arq_name = "A_"+self.name+"_ciclo_"+str(c)+".txt"
             Arq=open(arq_name,"w")
-            Arq.write(str(Ar))
+            print_aux(Arq,Ar)
             Arq.close()
 
             #Escreve B
             arq_name = "B_" + self.name + "_ciclo_" + str(c) + ".txt"
             Arq = open(arq_name, "w")
-            Arq.write(str(Br))
+            print_aux(Arq,Br)
             Arq.close()
 
             #Escreve C
             arq_name = "C_" + self.name + "_ciclo_" + str(c) + ".txt"
             Arq = open(arq_name, "w")
-            Arq.write(str(C))
+            print_aux(Arq,C)
             Arq.close()
+
+            print("Ciclo de Calculo "+str(c)+" completo")
 
             barreira_saida.release()
 
@@ -173,3 +172,11 @@ class Agregador(multiprocessing.Process):
         # Finaliza Todas as Threads
         for item in threads:
             item.terminate()
+
+
+def print_aux(file,matrix):
+    for row in matrix:
+        for item in np.nditer(row):
+            file.write(str(item))
+            file.write('\t')
+        file.write('\n')
